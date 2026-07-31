@@ -1,0 +1,136 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  student
+  technician
+  dept_head
+  admin
+}
+
+enum Priority {
+  P1_CRITICAL
+  P2_HIGH
+  P3_MEDIUM
+  P4_LOW
+}
+
+enum Status {
+  submitted
+  categorized
+  dept_assigned
+  tech_assigned
+  accepted
+  in_progress
+  proof_uploaded
+  verified
+  resolved
+  closed
+  reopened
+  rejected
+}
+
+model User {
+  id             String       @id @default(uuid())
+  name           String
+  email          String       @unique
+  role           Role         @default(student)
+  phone          String?
+  avatarUrl      String?
+  departmentId   String?
+  rating         Float?       @default(5.0)
+  completedJobs  Int          @default(0)
+  createdAt      DateTime     @default(now())
+  complaints     Complaint[]  @relation("StudentComplaints")
+  jobs           Complaint[]  @relation("TechnicianJobs")
+}
+
+model Building {
+  id                String      @id @default(uuid())
+  name              String
+  code              String      @unique
+  xCoord            Int
+  yCoord            Int
+  totalRooms        Int         @default(50)
+  activeIssuesCount Int         @default(0)
+  healthScore       Int         @default(100)
+  complaints        Complaint[]
+}
+
+model Department {
+  id                    String      @id @default(uuid())
+  name                  String
+  code                  String      @unique
+  headName              String?
+  headEmail             String?
+  activeTechs           Int         @default(0)
+  openTickets           Int         @default(0)
+  avgResolutionHours    Float       @default(4.0)
+  slaComplianceRate     Float       @default(95.0)
+  complaints            Complaint[]
+}
+
+model Complaint {
+  id                 String          @id @default(uuid())
+  trackingNumber     String          @unique
+  title              String
+  description        String
+  category           String
+  subcategory        String?
+  priority           Priority        @default(P3_MEDIUM)
+  status             Status          @default(submitted)
+  studentId          String
+  student            User            @relation("StudentComplaints", fields: [studentId], references: [id])
+  studentName        String
+  buildingId         String
+  building           Building        @relation(fields: [buildingId], references: [id])
+  buildingName       String
+  floor              String?
+  roomNumber         String?
+  departmentId       String?
+  department         Department?     @relation(fields: [departmentId], references: [id])
+  departmentName     String?
+  technicianId       String?
+  technician         User?           @relation("TechnicianJobs", fields: [technicianId], references: [id])
+  technicianName     String?
+  submittedAt        DateTime        @default(now())
+  responseDeadline   DateTime
+  resolutionDeadline DateTime
+  resolvedAt         DateTime?
+  rating             Int?
+  feedback           String?
+  isEscalated        Boolean         @default(false)
+  aiSummary          String?
+  sentiment          String?         @default("Neutral")
+  upvotesCount       Int             @default(1)
+  timeline           TimelineEvent[]
+  attachments        Attachment[]
+}
+
+model TimelineEvent {
+  id          String    @id @default(uuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  status      Status
+  title       String
+  description String?
+  timestamp   DateTime  @default(now())
+  actorName   String
+  actorRole   Role
+}
+
+model Attachment {
+  id          String    @id @default(uuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileUrl     String
+  fileType    String
+  uploadedAt  DateTime  @default(now())
+}

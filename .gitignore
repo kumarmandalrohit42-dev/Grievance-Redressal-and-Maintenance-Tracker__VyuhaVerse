@@ -1,0 +1,26 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Diagnostic data
+.gemini
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Production Builds
+dist/
+frontend/dist/
+backend/dist/
+
+# Environment Variables
+.env
+backend/.env
+
+# Temporary / Non-project PDF and PPTX files in workspace
+*.pdf
+*.pptx
