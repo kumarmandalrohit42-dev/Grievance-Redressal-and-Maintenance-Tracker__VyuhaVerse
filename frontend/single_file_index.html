@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CampusCare AI - Smart Campus Grievance & Maintenance System</title>
+  
+  <!-- Fonts & Tailwind CSS CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & Babel CDN for standalone rendering -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body { background-color: #020617; color: #f8fafc; }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen selection:bg-indigo-600 selection:text-white">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // --- Mock Data ---
+    const INITIAL_COMPLAINTS = [
+      {
+        id: 'TICK-9082',
+        title: 'WiFi AP Signal Dropout in CS Department Lab 3',
+        description: 'Frequent network disconnects observed every 15 minutes during lab hours. High latency to gateway.',
+        category: 'Internet',
+        priority: 'P2_HIGH',
+        status: 'in_progress',
+        studentName: 'Aarav Sharma',
+        buildingName: 'Tech Hub CS Block',
+        floor: '2nd Floor',
+        roomNumber: 'Lab 302',
+        departmentName: 'IT & Infrastructure',
+        submittedAt: '2026-07-30T10:15:00Z',
+        responseDeadline: '2026-07-30T14:15:00Z',
+        resolutionDeadline: '2026-07-31T10:15:00Z',
+        aiSummary: 'Critical network instability impacting 40+ active workstations.',
+        sentiment: 'Urgent',
+        isEscalated: false
+      },
+      {
+        id: 'TICK-9083',
+        title: 'Water Leakage near Main Auditorium Restroom',
+        description: 'Overflown pipe leak causing water accumulation near emergency exit.',
+        category: 'Water Leakage',
+        priority: 'P1_CRITICAL',
+        status: 'dept_assigned',
+        studentName: 'Priya Patel',
+        buildingName: 'Central Auditorium',
+        floor: 'Ground Floor',
+        roomNumber: 'Restroom B',
+        departmentName: 'Plumbing & Facilities',
+        submittedAt: '2026-07-30T11:00:00Z',
+        responseDeadline: '2026-07-30T12:00:00Z',
+        resolutionDeadline: '2026-07-30T17:00:00Z',
+        aiSummary: 'High slip risk; requires urgent shutoff valve action.',
+        sentiment: 'Frustrated',
+        isEscalated: true
+      },
+      {
+        id: 'TICK-9084',
+        title: 'Main Hall AC Unit Noisy Fan Motor',
+        description: 'AC Unit 4 making loud grinding noise during lectures.',
+        category: 'Electrical',
+        priority: 'P3_MEDIUM',
+        status: 'resolved',
+        studentName: 'Rohan Verma',
+        buildingName: 'Academic Block A',
+        floor: '1st Floor',
+        roomNumber: 'Lec Hall 101',
+        departmentName: 'Electrical Maintenance',
+        submittedAt: '2026-07-29T14:30:00Z',
+        responseDeadline: '2026-07-29T22:30:00Z',
+        resolutionDeadline: '2026-07-31T14:30:00Z',
+        aiSummary: 'HVAC motor bearing wear repaired and tested.',
+        sentiment: 'Neutral',
+        isEscalated: false
+      }
+    ];
+
+    const BUILDINGS = [
+      { id: 'b1', name: 'Tech Hub CS Block', x: 25, y: 35, active: 4, health: 88, status: 'moderate' },
+      { id: 'b2', name: 'Central Auditorium', x: 60, y: 25, active: 7, health: 65, status: 'high' },
+      { id: 'b3', name: 'Academic Block A', x: 40, y: 70, active: 2, health: 94, status: 'low' },
+      { id: 'b4', name: 'Hostel Complex H3', x: 75, y: 75, active: 5, health: 79, status: 'moderate' }
+    ];
+
+    // --- Main App Component ---
+    function App() {
+      const [role, setRole] = useState('student');
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [complaints, setComplaints] = useState(INITIAL_COMPLAINTS);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [selectedComplaint, setSelectedComplaint] = useState(null);
+      
+      // New Complaint Form
+      const [newTitle, setNewTitle] = useState('');
+      const [newDesc, setNewDesc] = useState('');
+      const [newCategory, setNewCategory] = useState('Electrical');
+      const [newBuilding, setNewBuilding] = useState('Tech Hub CS Block');
+      const [aiAnalyzing, setAiAnalyzing] = useState(false);
+      const [aiResult, setAiResult] = useState(null);
+
+      useEffect(() => {
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      const handleAIAnalyze = () => {
+        if (!newDesc) return;
+        setAiAnalyzing(true);
+        setTimeout(() => {
+          setAiAnalyzing(false);
+          setAiResult({
+            category: newDesc.toLowerCase().includes('water') ? 'Water Leakage' : newDesc.toLowerCase().includes('wifi') ? 'Internet' : 'Electrical',
+            priority: newDesc.toLowerCase().includes('urgent') || newDesc.toLowerCase().includes('leak') ? 'P1_CRITICAL' : 'P2_HIGH',
+            confidence: 94,
+            summary: 'Detected hardware/infrastructure defect with medium-to-high urgency impact.'
+          });
+        }, 800);
+      };
+
+      const handleSubmitComplaint = (e) => {
+        e.preventDefault();
+        const newTicket = {
+          id: `TICK-${Math.floor(1000 + Math.random() * 9000)}`,
+          title: newTitle,
+          description: newDesc,
+          category: aiResult?.category || newCategory,
+          priority: aiResult?.priority || 'P3_MEDIUM',
+          status: 'submitted',
+          studentName: 'Aarav Sharma',
+          buildingName: newBuilding,
+          floor: '1st Floor',
+          roomNumber: 'Room 102',
+          departmentName: 'General Maintenance',
+          submittedAt: new Date().toISOString(),
+          responseDeadline: new Date(Date.now() + 4*3600*1000).toISOString(),
+          resolutionDeadline: new Date(Date.now() + 24*3600*1000).toISOString(),
+          aiSummary: aiResult?.summary || 'Standard grievance request logged via student portal.',
+          sentiment: 'Neutral',
+          isEscalated: false
+        };
+        setComplaints([newTicket, ...complaints]);
+        setNewTitle('');
+        setNewDesc('');
+        setAiResult(null);
+        setActiveTab('dashboard');
+      };
+
+      const filteredComplaints = complaints.filter(c => 
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.category.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Header */}
+          <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+                CC
+              </div>
+              <div>
+                <h1 className="font-bold text-lg leading-tight tracking-wide bg-gradient-to-r from-indigo-400 to-purple-300 bg-clip-text text-transparent">
+                  CampusCare AI
+                </h1>
+                <p className="text-xs text-slate-400">Smart Campus Grievance & Maintenance System</p>
+              </div>
+            </div>
+
+            {/* Global Search Bar */}
+            <div className="flex-1 max-w-md mx-6">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search tickets by ID, category, title..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                <span className="absolute left-3 top-2 text-slate-500 text-sm">🔍</span>
+              </div>
+            </div>
+
+            {/* Role Switcher */}
+            <div className="flex items-center gap-3">
+              <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium">
+                {['student', 'technician', 'dept_head', 'admin'].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRole(r)}
+                    className={`px-3 py-1.5 rounded-md capitalize transition-all ${
+                      role === r 
+                        ? 'bg-indigo-600 text-white font-semibold shadow' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {r.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+
+              <div className="h-8 w-8 rounded-full bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-xs font-bold">
+                {role[0].toUpperCase()}
+              </div>
+            </div>
+          </header>
+
+          {/* Main Layout */}
+          <div className="flex-1 flex max-w-7xl w-full mx-auto px-6 py-6 gap-6">
+            {/* Sidebar */}
+            <aside className="w-64 shrink-0 flex flex-col gap-2">
+              <div className="glass-panel rounded-xl p-3 flex flex-col gap-1">
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === 'dashboard' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  }`}
+                >
+                  📊 Dashboard
+                </button>
+                <button
+                  onClick={() => setActiveTab('new')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === 'new' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  }`}
+                >
+                  ➕ Log Grievance
+                </button>
+                <button
+                  onClick={() => setActiveTab('map')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === 'map' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  }`}
+                >
+                  🗺️ Campus Heatmap
+                </button>
+                <button
+                  onClick={() => setActiveTab('analytics')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === 'analytics' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  }`}
+                >
+                  📈 SLA & Insights
+                </button>
+              </div>
+
+              {/* AI Assistant Callout */}
+              <div className="glass-panel rounded-xl p-4 border border-indigo-500/20 bg-indigo-950/20">
+                <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-2">
+                  ✨ Vision AI Ready
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Automatic categorisation, priority prediction & instant duplication checks enabled.
+                </p>
+              </div>
+            </aside>
+
+            {/* Content Body */}
+            <main className="flex-1 min-w-0">
+              {activeTab === 'dashboard' && (
+                <div className="space-y-6">
+                  {/* Metrics Bar */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="glass-panel p-4 rounded-xl border-l-4 border-l-indigo-500">
+                      <p className="text-xs text-slate-400">Total Grievances</p>
+                      <p className="text-2xl font-bold mt-1">{complaints.length}</p>
+                    </div>
+                    <div className="glass-panel p-4 rounded-xl border-l-4 border-l-amber-500">
+                      <p className="text-xs text-slate-400">Pending / In-Progress</p>
+                      <p className="text-2xl font-bold mt-1 text-amber-400">
+                        {complaints.filter(c => c.status !== 'resolved').length}
+                      </p>
+                    </div>
+                    <div className="glass-panel p-4 rounded-xl border-l-4 border-l-emerald-500">
+                      <p className="text-xs text-slate-400">Resolved Today</p>
+                      <p className="text-2xl font-bold mt-1 text-emerald-400">
+                        {complaints.filter(c => c.status === 'resolved').length}
+                      </p>
+                    </div>
+                    <div className="glass-panel p-4 rounded-xl border-l-4 border-l-rose-500">
+                      <p className="text-xs text-slate-400">Escalated Tickets</p>
+                      <p className="text-2xl font-bold mt-1 text-rose-400">
+                        {complaints.filter(c => c.isEscalated).length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Complaint Feed */}
+                  <div className="glass-panel rounded-xl p-5">
+                    <h2 className="text-base font-semibold mb-4 text-slate-200 flex items-center justify-between">
+                      <span>Active Tickets ({filteredComplaints.length})</span>
+                      <span className="text-xs text-slate-400 font-normal">Active Role: <strong className="text-indigo-400 capitalize">{role}</strong></span>
+                    </h2>
+
+                    <div className="space-y-3">
+                      {filteredComplaints.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-4 bg-slate-900/60 rounded-lg border border-slate-800 hover:border-slate-700 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-indigo-400 border border-slate-700">
+                                {item.id}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                                item.priority === 'P1_CRITICAL' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                                item.priority === 'P2_HIGH' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              }`}>
+                                {item.priority.replace('_', ' ')}
+                              </span>
+                              <span className="text-xs text-slate-400">• {item.category}</span>
+                            </div>
+
+                            <h3 className="font-semibold text-slate-100 text-sm">{item.title}</h3>
+                            <p className="text-xs text-slate-400">{item.description}</p>
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              📍 {item.buildingName} ({item.floor}, {item.roomNumber}) | Logged by: {item.studentName}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                              item.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                              item.status === 'in_progress' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                              'bg-slate-800 text-slate-300'
+                            }`}>
+                              {item.status.replace('_', ' ')}
+                            </span>
+                            <button
+                              onClick={() => setSelectedComplaint(item)}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+                            >
+                              View Details & Chat →
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'new' && (
+                <div className="glass-panel rounded-xl p-6 max-w-2xl mx-auto">
+                  <h2 className="text-lg font-bold mb-1 text-slate-100">Log New Grievance</h2>
+                  <p className="text-xs text-slate-400 mb-6">Use AI Smart Vision & Categorization for automated routing.</p>
+
+                  <form onSubmit={handleSubmitComplaint} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Issue Title</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g., Short circuit in Lab 2 outlet"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Detailed Description</label>
+                      <textarea
+                        rows="3"
+                        required
+                        placeholder="Describe what happened, location specifics, severity..."
+                        value={newDesc}
+                        onChange={(e) => setNewDesc(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      ></textarea>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAIAnalyze}
+                        disabled={aiAnalyzing || !newDesc}
+                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md shadow-purple-900/20 disabled:opacity-50"
+                      >
+                        {aiAnalyzing ? '✨ Analyzing with AI...' : '✨ Run AI Smart Analysis'}
+                      </button>
+                    </div>
+
+                    {aiResult && (
+                      <div className="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-lg space-y-1 text-xs">
+                        <p className="font-semibold text-indigo-300">✨ AI Analysis Results ({aiResult.confidence}% Confidence):</p>
+                        <p className="text-slate-300"><strong>Category:</strong> {aiResult.category}</p>
+                        <p className="text-slate-300"><strong>Priority:</strong> {aiResult.priority}</p>
+                        <p className="text-slate-400 italic">{aiResult.summary}</p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+                        <select
+                          value={newCategory}
+                          onChange={(e) => setNewCategory(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
+                        >
+                          <option>Electrical</option>
+                          <option>Internet</option>
+                          <option>Water Leakage</option>
+                          <option>Furniture</option>
+                          <option>Hostel</option>
+                          <option>Cleaning</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Building</label>
+                        <select
+                          value={newBuilding}
+                          onChange={(e) => setNewBuilding(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
+                        >
+                          <option>Tech Hub CS Block</option>
+                          <option>Central Auditorium</option>
+                          <option>Academic Block A</option>
+                          <option>Hostel Complex H3</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-sm transition-all shadow-lg shadow-indigo-600/30"
+                    >
+                      Submit Grievance
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {activeTab === 'map' && (
+                <div className="glass-panel rounded-xl p-6">
+                  <h2 className="text-lg font-bold mb-2 text-slate-100">Interactive Campus Infrastructure Map</h2>
+                  <p className="text-xs text-slate-400 mb-6">Real-time incident density & building maintenance status.</p>
+
+                  <div className="relative w-full h-80 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center">
+                    {/* Simulated Map Background Grid */}
+                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30"></div>
+
+                    {BUILDINGS.map(b => (
+                      <div
+                        key={b.id}
+                        style={{ left: `${b.x}%`, top: `${b.y}%` }}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
+                      >
+                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-bold text-xs border-2 shadow-lg transition-transform group-hover:scale-110 ${
+                          b.status === 'high' ? 'bg-rose-500/20 border-rose-500 text-rose-300' :
+                          b.status === 'moderate' ? 'bg-amber-500/20 border-amber-500 text-amber-300' :
+                          'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                        }`}>
+                          {b.active}
+                        </div>
+                        <div className="absolute top-14 left-1/2 -translate-x-1/2 whitespace-nowrap bg-slate-950/90 border border-slate-800 text-[11px] px-2 py-1 rounded font-medium shadow-md">
+                          {b.name} ({b.health}% Health)
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'analytics' && (
+                <div className="glass-panel rounded-xl p-6 space-y-6">
+                  <h2 className="text-lg font-bold text-slate-100">SLA & Predictive Maintenance Analytics</h2>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                      <p className="text-xs text-slate-400">SLA Compliance Rate</p>
+                      <p className="text-3xl font-extrabold text-emerald-400 mt-1">94.2%</p>
+                      <p className="text-[11px] text-slate-500 mt-1">Target: &gt;90%</p>
+                    </div>
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                      <p className="text-xs text-slate-400">Avg Resolution Time</p>
+                      <p className="text-3xl font-extrabold text-indigo-400 mt-1">4.2 hrs</p>
+                      <p className="text-[11px] text-slate-500 mt-1">Down 18% from last month</p>
+                    </div>
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                      <p className="text-xs text-slate-400">Student Satisfaction</p>
+                      <p className="text-3xl font-extrabold text-amber-400 mt-1">4.8 / 5.0</p>
+                      <p className="text-[11px] text-slate-500 mt-1">Based on 140 ratings</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+
+          {/* Ticket Detail Drawer Modal */}
+          {selectedComplaint && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-end">
+              <div className="w-full max-w-lg bg-slate-900 border-l border-slate-800 h-full p-6 overflow-y-auto flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="font-mono text-xs font-bold text-indigo-400">{selectedComplaint.id}</span>
+                    <button
+                      onClick={() => setSelectedComplaint(null)}
+                      className="text-slate-400 hover:text-white text-lg font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-slate-100 mb-2">{selectedComplaint.title}</h3>
+                  <p className="text-xs text-slate-300 mb-4">{selectedComplaint.description}</p>
+
+                  <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1 text-xs mb-4">
+                    <p className="text-slate-400"><strong>Location:</strong> {selectedComplaint.buildingName} ({selectedComplaint.floor}, {selectedComplaint.roomNumber})</p>
+                    <p className="text-slate-400"><strong>Department:</strong> {selectedComplaint.departmentName}</p>
+                    <p className="text-slate-400"><strong>AI Summary:</strong> {selectedComplaint.aiSummary}</p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800 pt-4">
+                  <p className="text-xs font-semibold text-slate-400 mb-2">Live Chat / Activity Log</p>
+                  <div className="h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 text-xs text-slate-400 space-y-2 overflow-y-auto">
+                    <p><strong className="text-indigo-400">System:</strong> Ticket logged and assigned to {selectedComplaint.departmentName}</p>
+                    <p><strong className="text-slate-300">{selectedComplaint.studentName}:</strong> Please address as soon as possible.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
